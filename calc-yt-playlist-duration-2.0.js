@@ -3,12 +3,12 @@
 'use strict';
 
 class YouTubePlaylistDurationCalculator {
-  constructor({ enableLogging = false }) {
-    this.LOGGING_ENABLED = enableLogging;
+  constructor() {
+    this.LOGGING_ENABLED = false;
   }
 
   insertJQuery() {
-    new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       if (this.LOGGING_ENABLED) console.log('[insertJQuery]', 'invoked');
 
       for (const script of document.scripts) {
@@ -16,7 +16,7 @@ class YouTubePlaylistDurationCalculator {
           if (this.LOGGING_ENABLED)
             console.log('[insertJQuery]', 'jquery script found, not including');
           resolve(null);
-          return; // TODO: Required?
+          return;
         }
       }
 
@@ -33,15 +33,15 @@ class YouTubePlaylistDurationCalculator {
     });
   }
 
-  getSecsFromString = (string = '') => {
+  getSecsFromString(string = '') {
     return string
       .split(':')
       .reverse()
-      .map((e, i) => +e * Math.pow(60, i))
-      .reduce((p, c) => p + c);
-  };
+      .map((element, index) => +element * Math.pow(60, index))
+      .reduce((prev, current) => prev + current);
+  }
 
-  calcSecsToTime = (secs = 0) => {
+  calcSecsToTime(secs = 0) {
     const DAY = 86400;
     const HOUR = 3600;
     const MINUTE = 60;
@@ -81,68 +81,76 @@ class YouTubePlaylistDurationCalculator {
       secs,
       string,
     };
-  };
+  }
 
-  stripAndCalculateDuration = () => {
+  stripAndCalculateDuration() {
     if (this.LOGGING_ENABLED)
       console.log('[stripAndCalculateDuration]', 'invoked');
 
-    let i = 0,
-      totalSecs = 0;
-    for (const video of $(
+    if (this.LOGGING_ENABLED)
+      console.groupCollapsed('[stripAndCalculateDuration]', 'stripped info');
+    let videoIndex = 0;
+    let totalSecs = 0;
+    for (const videoElement of $(
       'ytd-playlist-video-list-renderer div#contents'
     ).children()) {
-      ++i;
-      const title = $(video).find('a#video-title').text().trim(),
-        durationString = $(video)
+      videoIndex++;
+      const title = $(videoElement).find('a#video-title').text().trim(),
+        durationString = $(videoElement)
           .find('span#text.ytd-thumbnail-overlay-time-status-renderer')
           .text()
           .trim();
 
       if (this.LOGGING_ENABLED)
         console.log(
-          '[stripAndCalculateDuration]',
-          `stripped info: sr=${
-            i + 1
-          }, title=${title}, duration=${durationString}, previous secs sum=${totalSecs}`
+          `[${videoIndex}] title=${title}, duration=${durationString}, previous secs sum=${totalSecs}`
         );
 
-      totalSecs += getSecsFromString(durationString);
+      totalSecs += this.getSecsFromString(durationString);
     }
 
-    if (this.LOGGING_ENABLED)
+    if (this.LOGGING_ENABLED) {
+      console.groupEnd();
       console.log('[stripAndCalculateDuration]', { totalSecs });
+    }
 
-    const timeDuration = calcSecsToTime(totalSecs);
+    const timeDuration = this.calcSecsToTime(totalSecs);
     if (this.LOGGING_ENABLED)
       console.log('[stripAndCalculateDuration]', { timeDuration });
 
-    return timeDuration;
-  };
+    return { timeDuration, videoCount: videoIndex };
+  }
 
-  insertTimeDurationInHTML = duration => {
+  insertTimeDurationInHTML({ timeDuration, videoCount }) {
     if (this.LOGGING_ENABLED)
-      console.log('[insertTimeDurationInHTML]', 'invoked');
+      console.log('[insertTimeDurationInHTML]', 'invoked', {
+        timeDuration,
+        videoCount,
+      });
 
     const statsElement = $('#stats.ytd-playlist-sidebar-primary-info-renderer');
     const durationSpan = statsElement.find('span#playlist-total-duration');
+    const text = `⏱ ${timeDuration.string} for ${videoCount} videos`;
     if (durationSpan.length) {
       if (this.LOGGING_ENABLED)
         console.log('[insertTimeDurationInHTML]', 'updating duration span');
 
-      $(durationSpan).text(`(⏱ ${duration.string})`);
+      $(durationSpan).text(text);
     } else {
       if (this.LOGGING_ENABLED)
         console.log('[insertTimeDurationInHTML]', 'inserting duration span');
 
       statsElement.prepend(
-        `<span id='playlist-total-duration'>(⏱ ${duration.string})</span><br/>`
+        `<span id='playlist-total-duration'>${text}</span><br/>`
       );
     }
-  };
+  }
 
-  initDurationCalculation = () => {
+  run({ enableLogging = false } = {}) {
+    if (enableLogging) console.log('run', 'invoked', { enableLogging });
+
     try {
+      this.LOGGING_ENABLED = enableLogging;
       this.insertJQuery()
         .then(() => {
           this.insertTimeDurationInHTML(this.stripAndCalculateDuration());
@@ -153,7 +161,8 @@ class YouTubePlaylistDurationCalculator {
     } catch (e) {
       alert('Script error: ' + e.message);
     }
-  };
+  }
 }
 
-initDurationCalculation();
+const durationCalculator = new YouTubePlaylistDurationCalculator();
+durationCalculator.run({ enableLogging: true });
